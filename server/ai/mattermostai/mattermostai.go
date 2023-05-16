@@ -3,7 +3,6 @@ package mattermostai
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"image"
 	"image/png"
 	"io"
@@ -30,7 +29,8 @@ type ImageQueryRequest struct {
 }
 
 type TextQueryRequest struct {
-	Prompt string `json:"prompt"`
+	BotDescription string `json:"bot_description"`
+	Prompt         string `json:"prompt"`
 }
 
 type TextQueryResponse struct {
@@ -38,8 +38,9 @@ type TextQueryResponse struct {
 }
 
 func (s *MattermostAI) SummarizeThread(thread string) (*ai.TextStreamResult, error) {
-	prompt := thread + "\nbot, summarize the conversation so far"
-	requestBody, err := json.Marshal(TextQueryRequest{Prompt: prompt})
+	botDescription := `You are a helpful assistant that summarizes threads. Given a thread, return a summary of the thread using less than 30 words. Do not refer to the thread, just give the summary. Include who was speaking. Then answer any questions the user has about the thread. Keep your responses short.
+`
+	requestBody, err := json.Marshal(TextQueryRequest{BotDescription: botDescription, Prompt: thread})
 	if err != nil {
 		return nil, err
 	}
@@ -136,12 +137,12 @@ func (s *MattermostAI) SelectEmoji(message string) (string, error) {
 
 func (s *MattermostAI) ContinueThreadInterrogation(originalThread string, conversation ai.BotConversation) (*ai.TextStreamResult, error) {
 	prompt := originalThread + "\nbot, answer the question about the conversation so far: " // + strings.Join(posts, "\n")
-	requestBody, err := json.Marshal(TextQueryRequest{Prompt: prompt})
+	requestBody, err := json.Marshal(TextQueryRequest{Prompt: prompt, BotDescription: "You are a helpful assistant that answers questions about threads. Give a short answer that correctly answers questions asked."})
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := http.DefaultClient.Post(s.url+"/threadConversation", "application/json", bytes.NewReader(requestBody))
+	resp, err := http.DefaultClient.Post(s.url+"/botQuery", "application/json", bytes.NewReader(requestBody))
 	if err != nil {
 		return nil, err
 	}
@@ -158,6 +159,41 @@ func (s *MattermostAI) ContinueThreadInterrogation(originalThread string, conver
 	return ai.NewStreamFromString(response.Response), nil
 }
 
+func conversationToCompletion(conversation ai.BotConversation) string {
+	result := ""
+	for _, post := range conversation.Posts {
+		if post.Role == ai.PostRoleBot {
+			result += "<bot>: "
+		} else {
+			result += "<human>: "
+		}
+		result += post.Message
+		result += "\n"
+	}
+
+	return result
+}
+
 func (s *MattermostAI) ContinueQuestionThread(conversation ai.BotConversation) (*ai.TextStreamResult, error) {
-	return nil, errors.New("not implmented")
+	prompt := conversationToCompletion(conversation)
+	requestBody, err := json.Marshal(TextQueryRequest{Prompt: prompt, BotDescription: "You are a helpful assistant."})
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.DefaultClient.Post(s.url+"/botQuery", "application/json", bytes.NewReader(requestBody))
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var response TextQueryResponse
+	json.Unmarshal(data, &response)
+
+	return ai.NewStreamFromString(response.Response), nil
 }

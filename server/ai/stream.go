@@ -9,6 +9,7 @@ func NewStreamFromString(text string) *TextStreamResult {
 
 	go func() {
 		output <- text
+		close(output)
 	}()
 
 	return &TextStreamResult{
