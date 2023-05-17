@@ -7,8 +7,10 @@ import (
 	"image/png"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/crspeller/mattermost-plugin-summarize/server/ai"
+	"github.com/gorilla/websocket"
 )
 
 type MattermostAI struct {
@@ -45,21 +47,34 @@ func (s *MattermostAI) SummarizeThread(thread string) (*ai.TextStreamResult, err
 		return nil, err
 	}
 
-	resp, err := http.DefaultClient.Post(s.url+"/botQuery", "application/json", bytes.NewReader(requestBody))
+	url := strings.Replace(s.url, "http://", "ws://", 1)
+	url = strings.Replace(url, "https://", "wss://", 1)
+	c, _, err := websocket.DefaultDialer.Dial(url+"/botQueryStream", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+	c.WriteMessage(websocket.TextMessage, requestBody)
 
-	var response TextQueryResponse
-	json.Unmarshal(data, &response)
+	stream := make(chan string)
 
-	return ai.NewStreamFromString(response.Response), nil
+	go func() {
+		defer close(stream)
+		defer c.Close()
+		for {
+			messageType, message, err := c.ReadMessage()
+			if err != nil {
+				break
+			}
+			if messageType == websocket.CloseMessage {
+				break
+			}
+			stream <- string(message)
+			stream <- " "
+		}
+	}()
+
+	return &ai.TextStreamResult{Stream: stream}, nil
 }
 
 /*func (s *MattermostAI) AnswerQuestionOnThread(thread string, question string) (string, error) {
@@ -142,21 +157,33 @@ func (s *MattermostAI) ContinueThreadInterrogation(originalThread string, conver
 		return nil, err
 	}
 
-	resp, err := http.DefaultClient.Post(s.url+"/botQuery", "application/json", bytes.NewReader(requestBody))
+	url := strings.Replace(s.url, "http://", "ws://", 1)
+	url = strings.Replace(url, "https://", "wss://", 1)
+	c, _, err := websocket.DefaultDialer.Dial(url+"/botQueryStream", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+	c.WriteMessage(websocket.TextMessage, requestBody)
 
-	var response TextQueryResponse
-	json.Unmarshal(data, &response)
+	stream := make(chan string)
 
-	return ai.NewStreamFromString(response.Response), nil
+	go func() {
+		defer close(stream)
+		for {
+			messageType, message, err := c.ReadMessage()
+			if err != nil {
+				break
+			}
+			if messageType == websocket.CloseMessage {
+				break
+			}
+			stream <- string(message)
+			stream <- " "
+		}
+	}()
+
+	return &ai.TextStreamResult{Stream: stream}, nil
 }
 
 func conversationToCompletion(conversation ai.BotConversation) string {
@@ -181,19 +208,31 @@ func (s *MattermostAI) ContinueQuestionThread(conversation ai.BotConversation) (
 		return nil, err
 	}
 
-	resp, err := http.DefaultClient.Post(s.url+"/botQuery", "application/json", bytes.NewReader(requestBody))
+	url := strings.Replace(s.url, "http://", "ws://", 1)
+	url = strings.Replace(url, "https://", "wss://", 1)
+	c, _, err := websocket.DefaultDialer.Dial(url+"/botQueryStream", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+	c.WriteMessage(websocket.TextMessage, requestBody)
 
-	var response TextQueryResponse
-	json.Unmarshal(data, &response)
+	stream := make(chan string)
 
-	return ai.NewStreamFromString(response.Response), nil
+	go func() {
+		defer close(stream)
+		for {
+			messageType, message, err := c.ReadMessage()
+			if err != nil {
+				break
+			}
+			if messageType == websocket.CloseMessage {
+				break
+			}
+			stream <- string(message)
+			stream <- " "
+		}
+	}()
+
+	return &ai.TextStreamResult{Stream: stream}, nil
 }
