@@ -15,6 +15,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	BotUsername = "llmbot"
+)
+
 // Plugin implements the interface expected by the Mattermost server to communicate between the server and plugin processes.
 type Plugin struct {
 	plugin.MattermostPlugin
@@ -46,7 +50,7 @@ func (p *Plugin) OnActivate() error {
 	p.pluginAPI = pluginapi.NewClient(p.API, p.Driver)
 
 	botID, err := p.pluginAPI.Bot.EnsureBot(&model.Bot{
-		Username:    "llmbot",
+		Username:    BotUsername,
 		DisplayName: "LLM Bot",
 		Description: "LLM Bot",
 	})
@@ -55,19 +59,8 @@ func (p *Plugin) OnActivate() error {
 	}
 	p.botid = botID
 
-	origDB, err := p.pluginAPI.Store.GetMasterDB()
-	if err != nil {
+	if err := p.SetupDB(); err != nil {
 		return err
-	}
-	p.db = sqlx.NewDb(origDB, p.pluginAPI.Store.DriverName())
-
-	builder := sq.StatementBuilder.PlaceholderFormat(sq.Question)
-	if p.pluginAPI.Store.DriverName() == model.DatabaseDriverPostgres {
-		builder = builder.PlaceholderFormat(sq.Dollar)
-	}
-
-	if p.pluginAPI.Store.DriverName() == model.DatabaseDriverMysql {
-		p.db.MapperFunc(func(s string) string { return s })
 	}
 
 	p.registerCommands()
@@ -127,18 +120,21 @@ func (p *Plugin) MessageHasBeenPosted(c *plugin.Context, post *model.Post) {
 		return
 	}
 
-	if channel.Type != model.ChannelTypeDirect {
-		return
+	// Check if this is post in the DM channel with the bot
+	if channel.Type == model.ChannelTypeDirect && strings.Contains(channel.Name, p.botid) {
+		err = p.processUserRequestToBot(post, channel)
+		if err != nil {
+			p.pluginAPI.Log.Error("Unable to process bot reqeust: " + err.Error())
+			return
+		}
 	}
 
-	// Check if this DM channel is with the bot
-	if !strings.Contains(channel.Name, p.botid) {
-		return
-	}
-
-	err = p.processUserRequestToBot(post, channel)
-	if err != nil {
-		p.pluginAPI.Log.Error("Unable to process bot reqeust: " + err.Error())
-		return
+	// We are mentioned
+	if strings.Contains(post.Message, "@"+BotUsername) {
+		err = p.processUserRequestToBot(post, channel)
+		if err != nil {
+			p.pluginAPI.Log.Error("Unable to process bot mention: " + err.Error())
+			return
+		}
 	}
 }

@@ -1,40 +1,35 @@
 import {Store, Action} from 'redux';
 
 import {GlobalState} from '@mattermost/types/lib/store';
-import {ClientError} from '@mattermost/client';
-import {Client4} from 'mattermost-redux/client';
 
 import {manifest} from '@/manifest';
 
-import {PluginRegistry} from '@/types/mattermost-webapp';
+import {LLMBotPost} from './components/llmbot_post';
+import {doReaction, doSummarize} from './client';
 
 export default class Plugin {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-function
     public async initialize(registry: any, store: Store<GlobalState, Action<Record<string, unknown>>>) {
         registry.registerPostDropdownMenuAction('React for me', doReaction);
+        registry.registerPostDropdownMenuAction('Summarize Thread', makeSummarizePost(store));
+        registry.registerPostTypeComponent('custom_llmbot', LLMBotPost);
     }
 }
 
-async function doReaction(postid: string) {
-    const url = '/plugins/summarize/react/' + postid;
-    const response = await fetch(url, Client4.getOptions({
-        method: 'POST',
-    }));
+function makeSummarizePost(store: Store<GlobalState, Action<Record<string, unknown>>>) {
+    return async function summarizePost(postid: string) {
+        const state = store.getState();
+        const team = state.entities.teams.teams[state.entities.teams.currentTeamId];
+        window.WebappUtils.browserHistory.push('/' + team.name + '/messages/@llmbot');
 
-    if (response.ok) {
-        return;
-    }
-
-    throw new ClientError(Client4.url, {
-        message: '',
-        status_code: response.status,
-        url,
-    });
+        await doSummarize(postid);
+    };
 }
 
 declare global {
     interface Window {
         registerPlugin(pluginId: string, plugin: Plugin): void
+        WebappUtils: any
     }
 }
 
