@@ -131,6 +131,11 @@ func (p *Plugin) MessageHasBeenPosted(c *plugin.Context, post *model.Post) {
 
 	// We are mentioned
 	if strings.Contains(post.Message, "@"+BotUsername) {
+		if err := p.checkUsageRestrictions(post.UserId, channel); err != nil {
+			p.pluginAPI.Log.Error(err.Error())
+			return
+		}
+
 		err = p.processUserRequestToBot(post, channel)
 		if err != nil {
 			p.pluginAPI.Log.Error("Unable to process bot mention: " + err.Error())
