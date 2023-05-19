@@ -69,6 +69,9 @@ func (s *MattermostAI) SummarizeThread(thread string) (*ai.TextStreamResult, err
 			if messageType == websocket.CloseMessage {
 				break
 			}
+			if string(message) == "" {
+				break
+			}
 			stream <- string(message)
 			stream <- " "
 		}
