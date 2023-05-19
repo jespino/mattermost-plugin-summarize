@@ -13,6 +13,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const (
+	ChatMessageRoleSystem    = "system"
+	ChatMessageRoleUser      = "user"
+	ChatMessageRoleAssistant = "assistant"
+)
+
 type MattermostAI struct {
 	url    string
 	secret string
@@ -30,9 +36,18 @@ type ImageQueryRequest struct {
 	Prompt string `json:"prompt"`
 }
 
+type TextQueryMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
 type TextQueryRequest struct {
-	BotDescription string `json:"bot_description"`
-	Prompt         string `json:"prompt"`
+	BotDescription string             `json:"bot_description"`
+	Messages       []TextQueryMessage `json:"messages"`
+}
+
+type EmojiQueryRequest struct {
+	Prompt string `json:"prompt"`
 }
 
 type TextQueryResponse struct {
@@ -40,9 +55,9 @@ type TextQueryResponse struct {
 }
 
 func (s *MattermostAI) SummarizeThread(thread string) (*ai.TextStreamResult, error) {
-	botDescription := `You are a helpful assistant that summarizes threads. Given a thread, return a summary of the thread using less than 30 words. Do not refer to the thread, just give the summary. Include who was speaking. Then answer any questions the user has about the thread. Keep your responses short.
+	botDescription := `You are a helpful assistant that summarizes threads. Given a thread, return a short summary of the thread. Do not refer to the thread, just give the summary. Include who was speaking. Then answer any questions the user has about the thread. Keep your responses short.
 `
-	requestBody, err := json.Marshal(TextQueryRequest{BotDescription: botDescription, Prompt: thread})
+	requestBody, err := json.Marshal(TextQueryRequest{BotDescription: botDescription, Messages: []TextQueryMessage{{Role: ChatMessageRoleUser, Content: thread}}})
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +146,7 @@ func (s *MattermostAI) GenerateImage(prompt string) (image.Image, error) {
 }
 
 func (s *MattermostAI) SelectEmoji(message string) (string, error) {
-	requestBody, err := json.Marshal(TextQueryRequest{Prompt: message})
+	requestBody, err := json.Marshal(EmojiQueryRequest{Prompt: message})
 	if err != nil {
 		return "", err
 	}
@@ -155,7 +170,9 @@ func (s *MattermostAI) SelectEmoji(message string) (string, error) {
 
 func (s *MattermostAI) ContinueThreadInterrogation(originalThread string, conversation ai.BotConversation) (*ai.TextStreamResult, error) {
 	prompt := originalThread + "\nbot, answer the question about the conversation so far: " // + strings.Join(posts, "\n")
-	requestBody, err := json.Marshal(TextQueryRequest{Prompt: prompt, BotDescription: "You are a helpful assistant that answers questions about threads. Give a short answer that correctly answers questions asked."})
+	botDescription := "You are a helpful assistant that answers questions about threads. Give a short answer that correctly answers questions asked."
+
+	requestBody, err := json.Marshal(TextQueryRequest{BotDescription: botDescription, Messages: []TextQueryMessage{{Role: ChatMessageRoleUser, Content: prompt}}})
 	if err != nil {
 		return nil, err
 	}
@@ -189,24 +206,23 @@ func (s *MattermostAI) ContinueThreadInterrogation(originalThread string, conver
 	return &ai.TextStreamResult{Stream: stream}, nil
 }
 
-func conversationToCompletion(conversation ai.BotConversation) string {
-	result := ""
+func conversationToCompletion(conversation ai.BotConversation) []TextQueryMessage {
+	result := []TextQueryMessage{}
 	for _, post := range conversation.Posts {
+		role := ChatMessageRoleUser
 		if post.Role == ai.PostRoleBot {
-			result += "<bot>: "
-		} else {
-			result += "<human>: "
+			role = ChatMessageRoleAssistant
 		}
-		result += post.Message
-		result += "\n"
+		result = append(result, TextQueryMessage{Role: role, Content: post.Message})
 	}
 
 	return result
 }
 
 func (s *MattermostAI) ContinueQuestionThread(conversation ai.BotConversation) (*ai.TextStreamResult, error) {
-	prompt := conversationToCompletion(conversation)
-	requestBody, err := json.Marshal(TextQueryRequest{Prompt: prompt, BotDescription: "You are a helpful assistant."})
+	messages := conversationToCompletion(conversation)
+	botDescription := "You are a helpful assistant."
+	requestBody, err := json.Marshal(TextQueryRequest{BotDescription: botDescription, Messages: messages})
 	if err != nil {
 		return nil, err
 	}
