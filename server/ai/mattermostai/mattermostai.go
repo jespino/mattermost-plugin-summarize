@@ -57,7 +57,10 @@ type TextQueryResponse struct {
 func (s *MattermostAI) SummarizeThread(thread string) (*ai.TextStreamResult, error) {
 	botDescription := `You are a helpful assistant that summarizes threads. Given a thread, return a short summary of the thread. Do not refer to the thread, just give the summary. Include who was speaking. Then answer any questions the user has about the thread. Keep your responses short.
 `
-	requestBody, err := json.Marshal(TextQueryRequest{BotDescription: botDescription, Messages: []TextQueryMessage{{Role: ChatMessageRoleUser, Content: thread}}})
+	requestBody, err := json.Marshal(TextQueryRequest{BotDescription: botDescription, Messages: []TextQueryMessage{
+		{Role: ChatMessageRoleUser, Content: thread},
+		{Role: ChatMessageRoleAssistant, Content: "Let me summarize this."},
+	}})
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +91,6 @@ func (s *MattermostAI) SummarizeThread(thread string) (*ai.TextStreamResult, err
 				break
 			}
 			stream <- string(message)
-			stream <- " "
 		}
 	}()
 
@@ -199,7 +201,6 @@ func (s *MattermostAI) ContinueThreadInterrogation(originalThread string, conver
 				break
 			}
 			stream <- string(message)
-			stream <- " "
 		}
 	}()
 
@@ -249,7 +250,6 @@ func (s *MattermostAI) ContinueQuestionThread(conversation ai.BotConversation) (
 				break
 			}
 			stream <- string(message)
-			stream <- " "
 		}
 	}()
 
