@@ -8,6 +8,7 @@ import (
 	"github.com/crspeller/mattermost-plugin-summarize/server/ai"
 	"github.com/crspeller/mattermost-plugin-summarize/server/ai/mattermostai"
 	"github.com/crspeller/mattermost-plugin-summarize/server/ai/openai"
+	"github.com/crspeller/mattermost-plugin-summarize/server/ai/serge"
 	"github.com/jmoiron/sqlx"
 	pluginapi "github.com/mattermost/mattermost-plugin-api"
 	"github.com/mattermost/mattermost-server/v6/model"
@@ -67,12 +68,15 @@ func (p *Plugin) OnActivate() error {
 
 	openAI := openai.New(p.getConfiguration().OpenAIAPIKey)
 	mattermostAI := mattermostai.New(p.getConfiguration().MattermostAIUrl, p.getConfiguration().MattermostAISecret)
+	sergeAI := serge.New(p.getConfiguration().SergeUrl, p.getConfiguration().SergeModel)
 
 	switch p.getConfiguration().Summarizer {
 	case "openai":
 		p.summarizer = openAI
 	case "mattermostai":
 		p.summarizer = mattermostAI
+	case "serge":
+		p.summarizer = sergeAI
 	}
 
 	switch p.getConfiguration().ThreadAnswerer {
@@ -80,6 +84,8 @@ func (p *Plugin) OnActivate() error {
 		p.threadAnswerer = openAI
 	case "mattermostai":
 		p.threadAnswerer = mattermostAI
+	case "serge":
+		p.threadAnswerer = sergeAI
 	}
 
 	switch p.getConfiguration().GenericAnswerer {
@@ -87,6 +93,8 @@ func (p *Plugin) OnActivate() error {
 		p.genericAnswerer = openAI
 	case "mattermostai":
 		p.genericAnswerer = mattermostAI
+	case "serge":
+		p.genericAnswerer = sergeAI
 	}
 
 	switch p.getConfiguration().EmojiSelector {
@@ -94,6 +102,8 @@ func (p *Plugin) OnActivate() error {
 		p.emojiSelector = openAI
 	case "mattermostai":
 		p.emojiSelector = mattermostAI
+	case "serge":
+		p.emojiSelector = sergeAI
 	}
 
 	switch p.getConfiguration().ImageGenerator {

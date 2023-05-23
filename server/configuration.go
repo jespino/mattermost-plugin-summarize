@@ -21,6 +21,8 @@ type configuration struct {
 	OpenAIAPIKey       string
 	MattermostAIUrl    string
 	MattermostAISecret string
+	SergeUrl           string
+	SergeModel         string
 
 	Summarizer      string
 	ThreadAnswerer  string

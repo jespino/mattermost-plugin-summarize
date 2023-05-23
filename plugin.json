@@ -40,13 +40,36 @@
                 "display_name": "MattermostAI API secret:"
             },
             {
+                "key": "SergeUrl",
+                "type": "text",
+                "display_name": "Serge API url:"
+            },
+            {
+                "key": "SergeModel",
+                "type": "dropdown",
+                "display_name": "Serge Model:",
+                "options": [
+                    {"display_name": "Alpaca-7B", "value": "Alpaca-7B"},
+                    {"display_name": "Alpaca-7B-native", "value": "Alpaca-7B-native"},
+                    {"display_name": "Alpaca-13B", "value": "Alpaca-13B"},
+                    {"display_name": "Alpaca-30B", "value": "Alpaca-30B"},
+                    {"display_name": "GTP4All", "value": "GPT4All"},
+                    {"display_name": "OAsst-LLaMA-13B", "value": "OAsst-LLaMA-13B"},
+                    {"display_name": "OAsst-LLaMA-30B", "value": "OAsst-LLaMA-30B"},
+                    {"display_name": "Vicuna-7B", "value": "Vicuna-7B"},
+                    {"display_name": "Vicuna-13B", "value": "Vicuna-13B"}
+                ],
+                "default": "GPT4All"
+            },
+            {
                 "key": "Summarizer",
                 "type": "dropdown",
                 "display_name": "AI to summarize conversations",
                 "options": [
                     {"display_name": "None", "value": ""},
                     {"display_name": "Open AI", "value": "openai"},
-                    {"display_name": "Mattermost AI", "value": "mattermostai"}
+                    {"display_name": "Mattermost AI", "value": "mattermostai"},
+                    {"display_name": "Serge", "value": "serge"}
                 ],
                 "default": "openai"
             },
@@ -57,7 +80,8 @@
                 "options": [
                     {"display_name": "None", "value": ""},
                     {"display_name": "Open AI", "value": "openai"},
-                    {"display_name": "Mattermost AI", "value": "mattermostai"}
+                    {"display_name": "Mattermost AI", "value": "mattermostai"},
+                    {"display_name": "Serge", "value": "serge"}
                 ],
                 "default": "openai"
             },
@@ -68,7 +92,8 @@
                 "options": [
                     {"display_name": "None", "value": ""},
                     {"display_name": "Open AI", "value": "openai"},
-                    {"display_name": "Mattermost AI", "value": "mattermostai"}
+                    {"display_name": "Mattermost AI", "value": "mattermostai"},
+                    {"display_name": "Serge", "value": "serge"}
                 ],
                 "default": "openai"
             },
@@ -79,7 +104,8 @@
                 "options": [
                     {"display_name": "None", "value": ""},
                     {"display_name": "Open AI", "value": "openai"},
-                    {"display_name": "Mattermost AI", "value": "mattermostai"}
+                    {"display_name": "Mattermost AI", "value": "mattermostai"},
+                    {"display_name": "Serge", "value": "serge"}
                 ],
                 "default": "openai"
             },
