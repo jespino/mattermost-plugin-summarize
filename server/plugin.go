@@ -12,6 +12,7 @@ import (
 	"github.com/mattermost/mattermost-plugin-ai/server/ai/anthropic"
 	"github.com/mattermost/mattermost-plugin-ai/server/ai/asksage"
 	"github.com/mattermost/mattermost-plugin-ai/server/ai/openai"
+	"github.com/mattermost/mattermost-plugin-ai/server/ambiance"
 	pluginapi "github.com/mattermost/mattermost-plugin-api"
 	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/mattermost/mattermost-server/v6/plugin"
@@ -49,7 +50,8 @@ type Plugin struct {
 	db      *sqlx.DB
 	builder sq.StatementBuilderType
 
-	prompts *ai.Prompts
+	prompts  *ai.Prompts
+	ambiance *ambiance.Ambiance
 }
 
 func resolveffmpegPath() string {
@@ -63,6 +65,11 @@ func resolveffmpegPath() string {
 	}
 
 	return "ffmpeg"
+}
+
+func (p *Plugin) OnDeactivate() error {
+	p.ambiance.Stop()
+	return nil
 }
 
 func (p *Plugin) OnActivate() error {
@@ -95,6 +102,9 @@ func (p *Plugin) OnActivate() error {
 	}
 
 	p.registerCommands()
+
+	p.ambiance = ambiance.New(p.getLLM())
+	p.ambiance.Start()
 
 	return nil
 }

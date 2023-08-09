@@ -64,5 +64,14 @@ func (p *Plugin) SetupTables() error {
 		return errors.Wrap(err, "can't create feeback table")
 	}
 
+	if _, err := p.db.Exec(`
+		CREATE TABLE IF NOT EXISTS LLM_ChannelSummaries (
+			ChannelID TEXT NOT NULL REFERENCES Channels(ID) PRIMARY KEY,
+			Summary TEXT NOT NULL
+		);
+	`); err != nil {
+		return errors.Wrap(err, "can't create feeback table")
+	}
+
 	return nil
 }
