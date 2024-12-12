@@ -110,7 +110,6 @@ func (p *Plugin) OnActivate() error {
 					Trigger:     "create-team",
 					Hint:        "[team description]",
 					HelpText:    "Create a team with AI-suggested channels based on description",
-					IsRequired:  false,
 				},
 			},
 		},
