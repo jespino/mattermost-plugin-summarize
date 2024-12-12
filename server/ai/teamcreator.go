@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -15,20 +16,35 @@ func NewTeamCreator(llm LanguageModel) *TeamCreator {
 	}
 }
 
-func (tc *TeamCreator) SuggestChannels(teamDescription string) ([]string, error) {
+type ChannelSuggestion struct {
+	Name        string `json:"name"`
+	Purpose     string `json:"purpose"`
+	Header      string `json:"header"`
+	Private     bool   `json:"private"`
+	DisplayName string `json:"displayName"`
+}
+
+func (tc *TeamCreator) SuggestChannels(teamDescription string) ([]ChannelSuggestion, error) {
 	prompt := fmt.Sprintf(`Given this team description: "%s"
 
-Please suggest a list of 5-8 channels that would be useful for this team. Return only channel names separated by newlines.
-Channel names must:
-- Be lowercase
-- Use hyphens instead of spaces
-- Be descriptive but concise
-- Follow Mattermost channel naming conventions
+Please suggest a list of 5-8 channels that would be useful for this team. Return the response in JSON format.
+Each channel must have:
+- name: lowercase with hyphens instead of spaces
+- purpose: brief description of the channel's purpose
+- header: welcome message or description shown at top of channel
+- private: boolean indicating if it should be private
+- displayName: human readable name with proper capitalization
 
-Example format:
-general
-announcements
-team-updates`, teamDescription)
+Return format must be a JSON array of objects like:
+[
+  {
+    "name": "channel-slug",
+    "purpose": "Channel purpose description",
+    "header": "Welcome! This channel is for...",
+    "private": false,
+    "displayName": "Channel Display Name"
+  }
+]`, teamDescription)
 
 	result, err := tc.llm.ChatCompletionNoStream(BotConversation{
 		Posts: []Post{
@@ -42,14 +58,10 @@ team-updates`, teamDescription)
 		return nil, fmt.Errorf("failed to get channel suggestions: %w", err)
 	}
 
-	// Split response into lines and clean up
-	channels := []string{}
-	for _, line := range strings.Split(result, "\n") {
-		channel := strings.TrimSpace(line)
-		if channel != "" {
-			channels = append(channels, channel)
-		}
+	var suggestions []ChannelSuggestion
+	if err := json.Unmarshal([]byte(result), &suggestions); err != nil {
+		return nil, fmt.Errorf("failed to parse channel suggestions: %w", err)
 	}
 
-	return channels, nil
+	return suggestions, nil
 }

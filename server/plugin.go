@@ -428,21 +428,30 @@ func (p *Plugin) executeCreateTeam(args *model.CommandArgs, arguments []string) 
 	}
 
 	// Create channels
-	for _, channelName := range channels {
-		_, appErr := p.API.CreateChannel(&model.Channel{
+	var channelNames []string
+	for _, suggestion := range channels {
+		channelType := model.ChannelTypeOpen
+		if suggestion.Private {
+			channelType = model.ChannelTypePrivate
+		}
+		
+		channel, appErr := p.API.CreateChannel(&model.Channel{
 			TeamId:      team.Id,
-			Type:        model.ChannelTypeOpen,
-			Name:        channelName,
-			DisplayName: strings.Title(strings.ReplaceAll(channelName, "-", " ")),
+			Type:        channelType,
+			Name:        suggestion.Name,
+			DisplayName: suggestion.DisplayName,
+			Purpose:     suggestion.Purpose,
+			Header:      suggestion.Header,
 		})
 		if appErr != nil {
-			p.API.LogError("Failed to create channel", "channel", channelName, "error", appErr)
-			// Continue creating other channels
+			p.API.LogError("Failed to create channel", "channel", suggestion.Name, "error", appErr)
+			continue
 		}
+		channelNames = append(channelNames, suggestion.Name)
 	}
 
 	return &model.CommandResponse{
-		Text: fmt.Sprintf("Created team %s with %d channels: %s", team.DisplayName, len(channels), strings.Join(channels, ", ")),
+		Text: fmt.Sprintf("Created team %s with %d channels: %s", team.DisplayName, len(channelNames), strings.Join(channelNames, ", ")),
 		ResponseType: model.CommandResponseTypeEphemeral,
 	}, nil
 }
