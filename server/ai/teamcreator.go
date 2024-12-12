@@ -3,8 +3,6 @@ package ai
 import (
 	"fmt"
 	"strings"
-
-	"github.com/mattermost/mattermost/server/public/model"
 )
 
 type TeamCreator struct {
@@ -35,7 +33,7 @@ team-updates`, teamDescription)
 	result, err := tc.llm.ChatCompletionNoStream(BotConversation{
 		Posts: []Post{
 			{
-				Role:    "user",
+				Role:    PostRoleUser,
 				Message: prompt,
 			},
 		},
