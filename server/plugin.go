@@ -435,7 +435,7 @@ func (p *Plugin) executeCreateTeam(args *model.CommandArgs, arguments []string) 
 			channelType = model.ChannelTypePrivate
 		}
 		
-		channel, appErr := p.API.CreateChannel(&model.Channel{
+		_, appErr := p.API.CreateChannel(&model.Channel{
 			TeamId:      team.Id,
 			Type:        channelType,
 			Name:        suggestion.Name,
