@@ -356,47 +356,25 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 	}
 }
 
-func (p *Plugin) executeCreateTeam(args *model.CommandArgs, arguments []string) (*model.CommandResponse, *model.AppError) {
-	if len(arguments) < 2 {
-		return &model.CommandResponse{
-			Text: "Please provide a team name and description. Usage: /ai create-team [team-name] [description]",
-			ResponseType: model.CommandResponseTypeEphemeral,
-		}, nil
-	}
-
-	teamName := arguments[0]
-	description := strings.Join(arguments[1:], " ")
-
-	// Get a bot for AI operations
-	var bot *Bot
-	bot = p.GetBotForDMChannel(&model.Channel{Id: args.ChannelId})
-	if bot == nil {
-		// If no DM bot found, use the first configured bot
-		p.botsLock.RLock()
-		if len(p.bots) > 0 {
-			bot = p.bots[0]
-		}
-		p.botsLock.RUnlock()
-		
-		if bot == nil {
-			return &model.CommandResponse{
-				Text: "No AI service configured. Please configure at least one bot in the plugin settings.",
-				ResponseType: model.CommandResponseTypeEphemeral,
-			}, nil
-		}
-	}
+func (p *Plugin) createTeamAsync(args *model.CommandArgs, teamName string, description string, bot *Bot) {
 
 	// Create team creator with bot's LLM
 	teamCreator := ai.NewTeamCreator(p.getLLM(bot.cfg))
 
+	// Notify user that we're working on channel suggestions
+	p.API.SendEphemeralPost(args.UserId, &model.Post{
+		ChannelId: args.ChannelId,
+		Message:   "Working on creating your team with AI-suggested channels...",
+	})
+
 	// Get channel suggestions
 	channels, err := teamCreator.SuggestChannels(description)
 	if err != nil {
-		p.API.LogError("Failed to get channel suggestions", "error", err)
-		return &model.CommandResponse{
-			Text: "Failed to get channel suggestions from AI.",
-			ResponseType: model.CommandResponseTypeEphemeral,
-		}, nil
+		p.API.SendEphemeralPost(args.UserId, &model.Post{
+			ChannelId: args.ChannelId,
+			Message:   "Failed to get channel suggestions from AI: " + err.Error(),
+		})
+		return
 	}
 
 	// Use provided team name as display name
@@ -411,19 +389,21 @@ func (p *Plugin) executeCreateTeam(args *model.CommandArgs, arguments []string) 
 		Type:        model.TeamOpen,
 	})
 	if appErr != nil {
-		return &model.CommandResponse{
-			Text: "Failed to create team: " + appErr.Error(),
-			ResponseType: model.CommandResponseTypeEphemeral,
-		}, nil
+		p.API.SendEphemeralPost(args.UserId, &model.Post{
+			ChannelId: args.ChannelId,
+			Message:   "Failed to create team: " + appErr.Error(),
+		})
+		return
 	}
 
 	// Add creator to team
 	_, appErr = p.API.CreateTeamMember(team.Id, args.UserId)
 	if appErr != nil {
-		return &model.CommandResponse{
-			Text: "Failed to add you to team: " + appErr.Error(),
-			ResponseType: model.CommandResponseTypeEphemeral,
-		}, nil
+		p.API.SendEphemeralPost(args.UserId, &model.Post{
+			ChannelId: args.ChannelId,
+			Message:   "Failed to add you to team: " + appErr.Error(),
+		})
+		return
 	}
 
 	// Create channels
@@ -460,13 +440,51 @@ func (p *Plugin) executeCreateTeam(args *model.CommandArgs, arguments []string) 
 		successfulChannels = append(successfulChannels, suggestion.Name)
 	}
 
-	response := fmt.Sprintf("Created team %s with %d channels: %s", team.DisplayName, len(successfulChannels), strings.Join(successfulChannels, ", "))
+	response := fmt.Sprintf("✅ Team %s is ready!\nCreated %d channels: %s", team.DisplayName, len(successfulChannels), strings.Join(successfulChannels, ", "))
 	if len(failedChannels) > 0 {
 		response += fmt.Sprintf("\nFailed to create channels: %s", strings.Join(failedChannels, ", "))
 	}
 
+	p.API.SendEphemeralPost(args.UserId, &model.Post{
+		ChannelId: args.ChannelId,
+		Message:   response,
+	})
+}
+func (p *Plugin) executeCreateTeam(args *model.CommandArgs, arguments []string) (*model.CommandResponse, *model.AppError) {
+	if len(arguments) < 2 {
+		return &model.CommandResponse{
+			Text: "Please provide a team name and description. Usage: /ai create-team [team-name] [description]",
+			ResponseType: model.CommandResponseTypeEphemeral,
+		}, nil
+	}
+
+	teamName := arguments[0]
+	description := strings.Join(arguments[1:], " ")
+
+	// Get a bot for AI operations
+	var bot *Bot
+	bot = p.GetBotForDMChannel(&model.Channel{Id: args.ChannelId})
+	if bot == nil {
+		// If no DM bot found, use the first configured bot
+		p.botsLock.RLock()
+		if len(p.bots) > 0 {
+			bot = p.bots[0]
+		}
+		p.botsLock.RUnlock()
+		
+		if bot == nil {
+			return &model.CommandResponse{
+				Text: "No AI service configured. Please configure at least one bot in the plugin settings.",
+				ResponseType: model.CommandResponseTypeEphemeral,
+			}, nil
+		}
+	}
+
+	// Start async team creation
+	go p.createTeamAsync(args, teamName, description, bot)
+
 	return &model.CommandResponse{
-		Text:         response,
+		Text: fmt.Sprintf("Starting team creation for '%s'... I'll notify you when it's ready!", teamName),
 		ResponseType: model.CommandResponseTypeEphemeral,
 	}, nil
 }
