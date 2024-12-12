@@ -428,14 +428,16 @@ func (p *Plugin) executeCreateTeam(args *model.CommandArgs, arguments []string) 
 	}
 
 	// Create channels
-	var channelNames []string
+	var successfulChannels []string
+	var failedChannels []string
+
 	for _, suggestion := range channels {
 		channelType := model.ChannelTypeOpen
 		if suggestion.Private {
 			channelType = model.ChannelTypePrivate
 		}
-		
-		_, appErr := p.API.CreateChannel(&model.Channel{
+
+		channel, appErr := p.API.CreateChannel(&model.Channel{
 			TeamId:      team.Id,
 			Type:        channelType,
 			Name:        suggestion.Name,
@@ -443,15 +445,29 @@ func (p *Plugin) executeCreateTeam(args *model.CommandArgs, arguments []string) 
 			Purpose:     suggestion.Purpose,
 			Header:      suggestion.Header,
 		})
+
 		if appErr != nil {
 			p.API.LogError("Failed to create channel", "channel", suggestion.Name, "error", appErr)
+			failedChannels = append(failedChannels, suggestion.Name)
 			continue
 		}
-		channelNames = append(channelNames, suggestion.Name)
+
+		// Add the user to the channel
+		_, appErr = p.API.AddChannelMember(channel.Id, args.UserId)
+		if appErr != nil {
+			p.API.LogError("Failed to add user to channel", "channel", suggestion.Name, "error", appErr)
+		}
+
+		successfulChannels = append(successfulChannels, suggestion.Name)
+	}
+
+	response := fmt.Sprintf("Created team %s with %d channels: %s", team.DisplayName, len(successfulChannels), strings.Join(successfulChannels, ", "))
+	if len(failedChannels) > 0 {
+		response += fmt.Sprintf("\nFailed to create channels: %s", strings.Join(failedChannels, ", "))
 	}
 
 	return &model.CommandResponse{
-		Text: fmt.Sprintf("Created team %s with %d channels: %s", team.DisplayName, len(channelNames), strings.Join(channelNames, ", ")),
+		Text:         response,
 		ResponseType: model.CommandResponseTypeEphemeral,
 	}, nil
 }
