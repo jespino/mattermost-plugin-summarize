@@ -367,12 +367,22 @@ func (p *Plugin) executeCreateTeam(args *model.CommandArgs, arguments []string) 
 	description := strings.Join(arguments, " ")
 
 	// Get a bot for AI operations
-	bot := p.GetBotForDMChannel(&model.Channel{Id: args.ChannelId})
+	var bot *Bot
+	bot = p.GetBotForDMChannel(&model.Channel{Id: args.ChannelId})
 	if bot == nil {
-		return &model.CommandResponse{
-			Text: "Failed to get AI service configuration.",
-			ResponseType: model.CommandResponseTypeEphemeral,
-		}, nil
+		// If no DM bot found, use the first configured bot
+		p.botsLock.RLock()
+		if len(p.bots) > 0 {
+			bot = p.bots[0]
+		}
+		p.botsLock.RUnlock()
+		
+		if bot == nil {
+			return &model.CommandResponse{
+				Text: "No AI service configured. Please configure at least one bot in the plugin settings.",
+				ResponseType: model.CommandResponseTypeEphemeral,
+			}, nil
+		}
 	}
 
 	// Create team creator with bot's LLM
