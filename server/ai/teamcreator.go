@@ -3,7 +3,6 @@ package ai
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 )
 
 type TeamCreator struct {
