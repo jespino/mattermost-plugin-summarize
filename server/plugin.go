@@ -25,6 +25,7 @@ import (
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/mattermost/mattermost/server/public/shared/httpservice"
 	"github.com/nicksnyder/go-i18n/v2/i18n"
+	"strings"
 )
 
 const (
@@ -95,6 +96,27 @@ func (p *Plugin) OnActivate() error {
 	p.pluginAPI = pluginapi.NewClient(p.API, p.Driver)
 
 	p.licenseChecker = enterprise.NewLicenseChecker(p.pluginAPI)
+
+	// Register the ai create-team command
+	if err := p.API.RegisterCommand(&model.Command{
+		Trigger:          "ai",
+		AutoComplete:     true,
+		AutoCompleteDesc: "AI-powered commands",
+		AutoCompleteHint: "[command]",
+		AutocompleteData: &model.AutocompleteData{
+			Trigger: "ai",
+			SubCommands: []*model.AutocompleteData{
+				{
+					Trigger:     "create-team",
+					Hint:        "[team description]",
+					HelpText:    "Create a team with AI-suggested channels based on description",
+					IsRequired:  false,
+				},
+			},
+		},
+	}); err != nil {
+		return fmt.Errorf("failed to register command: %w", err)
+	}
 
 	p.metricsService = metrics.NewMetrics(metrics.InstanceInfo{
 		InstallationID: os.Getenv("MM_CLOUD_INSTALLATION_ID"),
@@ -312,4 +334,106 @@ func (p *Plugin) handleDMs(bot *Bot, channel *model.Channel, postingUser *model.
 	}
 
 	return nil
+}
+func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
+	split := strings.Fields(args.Command)
+	if len(split) < 2 {
+		return &model.CommandResponse{
+			Text: "Invalid command. Use `/ai help` to see available commands.",
+			ResponseType: model.CommandResponseTypeEphemeral,
+		}, nil
+	}
+
+	command := split[1]
+
+	switch command {
+	case "create-team":
+		return p.executeCreateTeam(args, split[2:])
+	default:
+		return &model.CommandResponse{
+			Text: "Unknown command. Use `/ai help` to see available commands.",
+			ResponseType: model.CommandResponseTypeEphemeral,
+		}, nil
+	}
+}
+
+func (p *Plugin) executeCreateTeam(args *model.CommandArgs, arguments []string) (*model.CommandResponse, *model.AppError) {
+	if len(arguments) == 0 {
+		return &model.CommandResponse{
+			Text: "Please provide a team description.",
+			ResponseType: model.CommandResponseTypeEphemeral,
+		}, nil
+	}
+
+	description := strings.Join(arguments, " ")
+
+	// Get a bot for AI operations
+	bot := p.GetBotForDMChannel(&model.Channel{Id: args.ChannelId})
+	if bot == nil {
+		return &model.CommandResponse{
+			Text: "Failed to get AI service configuration.",
+			ResponseType: model.CommandResponseTypeEphemeral,
+		}, nil
+	}
+
+	// Create team creator with bot's LLM
+	teamCreator := ai.NewTeamCreator(p.getLLM(bot.cfg))
+
+	// Get channel suggestions
+	channels, err := teamCreator.SuggestChannels(description)
+	if err != nil {
+		p.API.LogError("Failed to get channel suggestions", "error", err)
+		return &model.CommandResponse{
+			Text: "Failed to get channel suggestions from AI.",
+			ResponseType: model.CommandResponseTypeEphemeral,
+		}, nil
+	}
+
+	// Create team name from description
+	teamName := model.NewId()
+	displayName := description
+	if len(displayName) > 64 {
+		displayName = displayName[:61] + "..."
+	}
+
+	// Create the team
+	team, appErr := p.API.CreateTeam(&model.Team{
+		Name:        teamName,
+		DisplayName: displayName,
+		Type:        model.TeamOpen,
+	})
+	if appErr != nil {
+		return &model.CommandResponse{
+			Text: "Failed to create team: " + appErr.Error(),
+			ResponseType: model.CommandResponseTypeEphemeral,
+		}, nil
+	}
+
+	// Add creator to team
+	_, appErr = p.API.CreateTeamMember(team.Id, args.UserId)
+	if appErr != nil {
+		return &model.CommandResponse{
+			Text: "Failed to add you to team: " + appErr.Error(),
+			ResponseType: model.CommandResponseTypeEphemeral,
+		}, nil
+	}
+
+	// Create channels
+	for _, channelName := range channels {
+		_, appErr := p.API.CreateChannel(&model.Channel{
+			TeamId:      team.Id,
+			Type:        model.ChannelTypeOpen,
+			Name:        channelName,
+			DisplayName: strings.Title(strings.ReplaceAll(channelName, "-", " ")),
+		})
+		if appErr != nil {
+			p.API.LogError("Failed to create channel", "channel", channelName, "error", appErr)
+			// Continue creating other channels
+		}
+	}
+
+	return &model.CommandResponse{
+		Text: fmt.Sprintf("Created team %s with %d channels: %s", team.DisplayName, len(channels), strings.Join(channels, ", ")),
+		ResponseType: model.CommandResponseTypeEphemeral,
+	}, nil
 }
