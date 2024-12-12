@@ -357,14 +357,15 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 }
 
 func (p *Plugin) executeCreateTeam(args *model.CommandArgs, arguments []string) (*model.CommandResponse, *model.AppError) {
-	if len(arguments) == 0 {
+	if len(arguments) < 2 {
 		return &model.CommandResponse{
-			Text: "Please provide a team description.",
+			Text: "Please provide a team name and description. Usage: /ai create-team [team-name] [description]",
 			ResponseType: model.CommandResponseTypeEphemeral,
 		}, nil
 	}
 
-	description := strings.Join(arguments, " ")
+	teamName := arguments[0]
+	description := strings.Join(arguments[1:], " ")
 
 	// Get a bot for AI operations
 	var bot *Bot
@@ -398,16 +399,14 @@ func (p *Plugin) executeCreateTeam(args *model.CommandArgs, arguments []string) 
 		}, nil
 	}
 
-	// Create team name from description
-	teamName := model.NewId()
-	displayName := description
-	if len(displayName) > 64 {
-		displayName = displayName[:61] + "..."
-	}
+	// Use provided team name as display name
+	displayName := teamName
+	// Create URL-friendly team name
+	urlName := strings.ToLower(strings.ReplaceAll(teamName, " ", "-"))
 
 	// Create the team
 	team, appErr := p.API.CreateTeam(&model.Team{
-		Name:        teamName,
+		Name:        urlName,
 		DisplayName: displayName,
 		Type:        model.TeamOpen,
 	})
